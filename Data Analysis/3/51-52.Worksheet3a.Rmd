@@ -1,0 +1,426 @@
+---
+title: "Data Analytics"
+subtitle: "Time Series Analysis and Forecasting Techniques"
+
+output: pdf_document
+urlcolor: blue
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+\-\-\-\--
+
+# Water Level Forecasting
+
+Imagine that you're working towards water conservation.
+
+You have been given a dataset, and your task is to predict the level of
+water, to facilitate governance decisions such as reservoir design,
+water drainage policies, etc.
+
+### Contents of the worksheet
+
+It is suggested to have a grip on the theoretical concepts of:
+
+-   Components of time series data
+
+-   Decomposition of time series data
+
+-   Exponential Smoothing techniques
+
+-   Stationary Signals, Dickey-fuller test and Differencing
+
+-   Forecasting with AR, MA, ARMA
+
+-   Autocorrelation (ACF, PACF) and ARIMA
+
+-   Exogenous variables in time series (ARIMAX and SARIMAX)
+
+\-\-\-\--
+
+### Dataset
+
+The data is provided to you in the `water.csv` file.
+
+The data dictionary is as follows:
+
+    date - The date of collection of data
+
+    rainfall - Measurement of rain falling in the area (in mm)
+
+    groundwater_level - Indicates groundwater level, expressed in
+    ground level 
+    (meters from the ground floor)
+
+    temperature - Indicates temperature (in Celsius) in the area
+
+    drainage_volume - Volume of water taken from the groundwater storage for usage purposes
+
+    river_level - Indicates the river level (in m) which feeds the groundwater indirectly
+
+The **target variable** is `groundwater_level`, which is what we shall
+forecast in this worksheet.
+
+`groundwater_level` is quite important in hydrogeology, where it is used
+for water resource management, drought and flood mitigation, design and
+maintenance of groundwater storage systems, etc.
+
+\-\-\-\--
+
+### Data Ingestion and Preprocessing
+
+-   Reading this file into a data.frame object
+
+```{r}
+df <- read.csv('water.csv')
+head(df)
+```
+
+-   We'll pick the `groundwater_level` column in our DataFrame, since
+    we'll be doing most of our analysis on this variable.
+
+```{r}
+gwl <- df$groundwater_level
+head(gwl)
+```
+
+# Univariate Time Series Modelling
+
+-   While dealing with Univariate Modeling, we consider only the date
+    column and the target column.
+
+> **Tip:** **Make sure to check that the time column is in chronological
+> order, and the time intervals are equidistant!**
+
+-   We need to create a `ts` object in R. This can be done using the
+    `ts` function. We'll use our frequency as 365, since we have daily
+    data.
+
+-   If we were using weekly data, we'd have the frequency as 52, for
+    monthly data it'd be 12, and so on.
+
+```{r}
+gwl_ts <- ts(gwl, frequency=365, start=c(2015, 1, 9))
+gwl_ts[1:90]
+```
+
+-   Visualize the Time-Series of `groundwater_level` column
+
+```{r fig.width=5, fig.height=3}
+plot.ts(gwl_ts)
+```
+
+## Section 1: Decomposition
+
+### *Question 1.1:* Decompose the `groundwater_level` column into the constituent components, and plot them.
+
+> Hint: Look at the `decompose` function.
+
+    ####################################################
+
+### *your code here*
+
+    ####################################################
+
+<div>
+
+> **Sometimes, we look at upsampling or downsampling the data. For
+> instance, if we have sensor data for each second, we might not need
+> such granular data, and we downsample the data to daily data or hourly
+> data or so.**
+>
+> **Explore further here:
+> <https://machinelearningmastery.com/resample-interpolate-time-series-data-python/>**
+
+</div>
+
+<div>
+
+You can also explore adding the decomposed versions of each feature
+(column) to your data, and utilize it as exogenous variables for
+multivariate forecasting! This would require you to decompose all
+features, such as `temperature`, `rainfall`, etc. as well, which is out
+of scope of this worksheet.
+
+</div>
+
+### *Question 1.2 :* Which model of time series did you use for decomposition, and why? (between additive and multiplicative models)
+
+    ####################################################
+
+### *your answer here*
+
+    ####################################################
+
+\-\-\-\--
+
+## Section 2: Exponential Smoothing
+
+-   Perform forecasts using Single, Double and Triple Exponential
+    Smoothing.
+
+-   Plot forecasts of all three forecasts (using different colors),
+    against the true values. (Use `lines`)
+
+-   Only one function needed for all three forecasts, only requiring you
+    to change the parameters to get each of the 3 models.
+
+-   Hint: look at the `HoltWinters` function in R
+
+-   Go ahead, and experiment with the values of `alpha`, `beta` and
+    `gamma` and see how the forecast changes.
+
+```{=html}
+<!-- -->
+```
+    ####################################################
+
+### *your code here*
+
+    ####################################################
+
+### Question 2.1: Compare accuracy metrics (MAE, MAPE, MSE, RMSE) of the three models with the original series.
+
+```{r}
+
+calculate_metrics <- function(actual_values, predicted_values) {
+
+  mae_value <- mean(abs(actual_values - predicted_values))
+  
+
+  mape_value <- mean(abs((actual_values - predicted_values) / actual_values)) * 100
+  
+
+  mse_value <- mean((actual_values - predicted_values)^2)
+  
+
+  rmse_value <- sqrt(mse_value)
+  
+  return(list(MAE = mae_value, MAPE = mape_value, MSE = mse_value, RMSE = rmse_value))
+}
+```
+
+### Use the above function on your results from the three types of exponential smoothing and analyze.
+
+    ####################################################
+
+### *your code and answer here*
+
+    ####################################################
+
+\-\--
+
+## Section 3: Stationarity
+
+-   **Testing for stationarity**
+
+    -   We can use the Augmented Dickey-Fuller test (ADF) to test the
+        time series for stationarity.
+
+### *Question 3.1:* What are the null hypothesis and alternate hypothesis in this case?
+
+    ####################################################
+
+### *your answer here*
+
+    ####################################################
+
+```{r}
+library(tseries)
+
+adf_test <- adf.test(gwl_ts)
+print(adf_test)
+```
+
+### *Question 3.2:* What can you tell from the adf-test? Is this series stationary or non-stationary? Why do you say so?
+
+    ####################################################
+
+### *your answer here*
+
+    ####################################################
+
+<div>
+
+> -   If the data is not stationary, and if we intend to use a model
+>     like ARIMA, the data has to be transformed.
+>
+> -   Two most common methods to transform series to stationary are:
+>
+>     -   **Transformations:** eg. log or square root or combinations of
+>         these transformations to stabilize non-constant variance.
+>
+>     -   **Differencing:** subtract current value from previous (with a
+>         certain degree)
+>
+> Check this out for more information, and an implementation in Python!:
+>
+> <https://www.kaggle.com/code/rdizzl3/time-series-transformations>
+
+</div>
+
+### *Question 3.3:* Create a new dataframe using suitable differencing order, to convert the data to stationary time series.
+
+> **Hint:** You can use the ADF function to confirm the time series is
+> stationary after transformation.
+
+    ####################################################
+
+### *your code here*
+
+    ####################################################
+
+\-\-\-\--
+
+## Section 4: Autocorrelation Analysis
+
+-   We will experiment and plot two functions:
+
+    -   **ACF (Autocorrelation function):** The autocorrelation function
+        (ACF) is a statistical technique that we can use to identify how
+        correlated the values in a time series are with each other. The
+        ACF plots the correlation coefficient against the lag, which is
+        measured in terms of a number of periods or units.
+
+    -   **PACF (Partial Autocorrelation function):** Partial
+        autocorrelation is a statistical measure that captures the
+        correlation between two variables after controlling for the
+        effects of other variables.
+
+```{r fig.width=5, fig.height=4}
+library(tseries)
+
+# acf_result <- acf(gwl_diff, lag.max = 50, plot = TRUE)
+# pacf_result <- pacf(gwl_diff, lag.max = 50, plot = TRUE)
+```
+
+### *Question 4.1 :* What are the values of p, q and d? How did you come to this conclusion, looking at the ACF, PACF plots?
+
+> Hint: The value of `d` is decided by the order of differencing, as
+> transformed in the previous section.
+
+    ####################################################
+
+### *your answer here*
+
+    ####################################################
+
+\-\-\-\--
+
+## Section 5: Time Series Forecasting using Statistical Models
+
+-   Before we apply models for forecasting, we need to create a training
+    and validation/test set, as would be the procedure for most machine
+    learning problems.
+
+-   However, one thing to keep in mind while performing this split for
+    time series data: ***NEVER*** **perform a random split.**
+
+### *Question 5.1:* Why do you think we shouldn't perform a random split on our data to create a train/test/dev set?
+
+    ####################################################
+
+### *your answer here*
+
+    ####################################################
+
+-   We shall go ahead and split according to chronological order here.
+
+-   We implement a 80-20% split for train-test sets here. Ideally, you
+    would also have a validation set, but it isn't necessary within this
+    worksheet.
+
+```{r}
+split_index <- floor(length(gwl_ts) * 0.8) 
+
+train <- ts(gwl_ts[1:split_index])
+test <- ts(gwl_ts[(split_index + 1):length(gwl_ts)], start=split_index+1) 
+```
+
+<div>
+
+> If you're working with Python, `scikit-learn` has a function which is
+> capable of creating train-test-validation splits for time series data
+> automatically.
+
+</div>
+
+### *Question 5.2:* Implement AR, MA and ARMA models, with the optimal values of `p` and `q` as calculated from PACF and ACF plots previously.
+
+```{r}
+# install.packages("forecast")
+library(forecast)
+```
+
+> **Hint:** Look at `Arima` function in R.
+
+    ####################################################
+
+### *your code here*
+
+    ####################################################
+
+### *Question 5.3*: Implement the ARIMA model, with the optimal values of `p`, `d`, `q` as calculated from PACF and ACF plots previously.
+
+    ####################################################
+
+### *your code here*
+
+    ####################################################
+
+### *Question 5.4:*
+
+### 1. Which models performed better? The exponential smoothing models, or the statistical models (AR, MA, ARMA, ARIMA). Why?
+
+### 2. Is this always the case?
+
+### 3. Do you think you'd get a better result if you used SARIMA?
+
+### 4. Do you think exogenous variables would give you a better accuracy? (i.e ARIMAX?)
+
+### 5. Other than providing the other features in the dataset (such as `temperature`, `rainfall`, etc.), what kind of engineered features would you give as exogenous variables that could improve performance?
+
+> Hint: Some of these possible features were mentioned previously in
+> this worksheet.
+
+    ####################################################
+
+### *your answer here*
+
+    ####################################################
+
+\-\-\-\-\--
+
+### Congratulations on reaching the end of this worksheet! I hope you enjoyed it, and have an understanding of how practical time series analysis works.
+
+Some advanced concepts for you to explore are listed below:
+
+-   One of the main errors of dealing with time-series data includes
+    preventing `lookahead`. It's extremely important that you aren't
+    looking at future values to predict earlier ones. You can read more
+    about it here:
+
+    <https://bowtiedraptor.substack.com/p/look-ahead-bias-and-how-to-prevent>
+
+-   Although the dataset provided to you for this worksheet was cleaned
+    prior, real world data is extremely dirty. Time series data
+    especially tends to contain quite a few missing values. Try to
+    explore some ways of taking care of missing values in data. Some
+    techniques include imputation, forward fills, interpolation, moving
+    averages, etc.
+
+-   Understanding some Classical Machine Learning techniques for Time
+    Series Forecasting, such as Decision Trees, Forests, Feed-forward
+    Neural Networks, etc.
+
+    <https://machinelearningmastery.com/random-forest-for-time-series-forecasting/>
+
+    <https://www.section.io/engineering-education/feedforward-and-recurrent-neural-networks-python-implementation/>
+
+\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\--

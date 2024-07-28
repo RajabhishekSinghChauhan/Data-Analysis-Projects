@@ -1,0 +1,206 @@
+---
+title: "Data Analytics Worksheet - 2b"
+
+---
+
+```{r}
+data <- read.csv('w2.csv')
+head(data)
+```
+```{r}
+summary(data)
+```
+(Ask yourselves, is there merit to thinking of this problem as a time series problem given the distinctly seasonal behaviour of water bodies?)
+Yes,Indeed, it's worthwhile to consider this as a time series problem because the data has been gathered over time and exhibits a noticeable temporal pattern.
+
+
+Partition the data into training and testing sets by selecting the initial 80% for training and the subsequent 20% for testing
+```{r}
+num_rows <- nrow(data)
+train_size <- round(0.8 * num_rows)
+
+training_data <- data[1:train_size, ]
+testing_data <- data[(train_size + 1):num_rows, ]
+```
+In the provided code, the training data consists of the initial 80% of the rows, with the remaining portion designated as the test data.
+
+
+## Correlation plot
+
+Create a correlogram
+```{r}
+library(ggplot2)
+library(corrplot)
+cor_matrix <- cor(data)
+cor_df <- as.data.frame(as.table(cor_matrix))
+correlogram <- ggplot(cor_df, aes(x = Var1, y = Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
+                       midpoint = 0, limits = c(-1, 1), name = "Correlation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Correlogram")
+
+print(correlogram)
+```
+When considering WVHT as the dependent variable, there are four highly correlated independent variables: APD, DPD, GST, and WSPD.
+
+
+Create the MLR model with the most suitable parameters
+```{r}
+mlr_model <- lm(WVHT ~ APD + DPD + GST + WSPD, data = training_data)
+summary(mlr_model)
+```
+Based on the model's summary statistics, we can infer that the residuals fall within a relatively narrow range of -0.586 to 0.541, suggesting they are relatively small in magnitude and are centered around zero. These observations indicate that the model performs adequately
+The F-statistic, with its notably high value of 7719, accompanied by an extremely small p-value, underscores the substantial and statistically significant influence of the independent variables on the dependent variable
+
+
+Display the R-squared statistic for this model's performance on the testing data. You can calculate it using the formula: R-squared = 1 - (RSS / TSS), where RSS is the Residual Sum of Squares, and TSS is the Total Sum of Squares
+
+```{r}
+predictions <- predict(mlr_model, newdata = testing_data)
+
+residuals <- testing_data$WVHT - predictions
+RSS <- sum(residuals^2)
+
+mean_WVHT <- mean(testing_data$WVHT)
+TSS <- sum((testing_data$WVHT - mean_WVHT)^2)
+
+R_squared <- 1 - (RSS / TSS)
+print(R_squared)
+```
+The R-squared value assesses the model's ability to predict observed values. A value closer to 1 indicates a better ability to explain variability in the dependent variable. In this model, the R-squared value is 0.8073383, suggesting it effectively captures patterns and relationships between the independent and dependent variables. This indicates that the model performs well. 
+
+
+## Ridge Regression
+
+Perform Ridge Regression on the training data and compare the predictions with the test data to check for the fit of the model. (Hint: Use the glmnet library)
+```{r}
+library(glmnet)
+y_train <- training_data$WVHT
+X_train <- as.matrix(training_data[, c("APD", "DPD", "GST", "WSPD")])
+
+y_test <- testing_data$WVHT
+X_test <- as.matrix(testing_data[, c("APD", "DPD", "GST", "WSPD")])
+
+#Ridge Regression
+lambda=0.01
+ridge_model <- glmnet(X_train, y_train, alpha = 0, lambda = lambda)
+coef(ridge_model)
+predictions <- predict(ridge_model, s = lambda, newx = X_test)
+rmse <- sqrt(mean((predictions - y_test)^2))
+cat("RMS Error:", rmse, "\n")
+```
+A lower Root Mean Square Error (RMSE) indicates better predictive accuracy. Our model has an RMSE of 0.115, which is relatively low, signifying high accuracy in the predictions made by the Ridge regression model..
+
+
+Print the R-squared statistic. Does the model seem to be fitting well?
+```{r}
+R_squared <- 1 - (sum((predictions - y_test)^2) / sum((y_test - mean(y_test))^2))
+cat("R-squared:", R_squared, "\n")
+```
+The r-square value obtained is quite high(0.829) and shows that the model fits well.
+
+What was your lambda? Is it possible for you to somehow conduct hyperparameter tuning and find the best lambda value for the Ridge Regression model? (Hint: use the cv.glmnet function)
+ANS- The lambda value I had considered before was 0.01
+```{r}
+lambda_values <- seq(0.001, 1, by = 0.001)  # Adjust the range of lambda values as needed
+ridge_model_cv <- cv.glmnet(X_train, y_train, alpha = 0, lambda = lambda_values)
+best_lambda <- ridge_model_cv$lambda.min
+cat("Best Lambda Value:", best_lambda, "\n")
+```
+We have found the optimal lambda value to be 0.001 using glmnet with cross-validation, considering a range of lambda values. It minimizes the root mean squared error.
+
+
+With the optimal lambda, build the model again and print the coefficients of the various dependent variables. Compare this to coefficients with models that had a higher or lower value of lambda. What can you comment about the relationship between lambda and the strength of regularization?
+```{r}
+optimal_lambda <- 0.001
+ridge_model_optimal <- glmnet(X_train, y_train, alpha = 0, lambda = optimal_lambda)
+coef(ridge_model_optimal)
+```
+The relationship between lambda and the strength of regularization in Ridge Regression is such that lower lambda values result in weaker regularization. This weaker regularization enables the model to fit the data more closely and leads to coefficients with larger absolute values.
+
+
+What can you comment about the R-squared statistic value of the best model? Is it higher or lower than in the case of MLR?
+```{r}
+predictions <- predict(ridge_model_optimal, s = optimal_lambda, newx = X_test)
+R_squared <- 1 - (sum((predictions - y_test)^2) / sum((y_test - mean(y_test))^2))
+cat("R-squared:", R_squared, "\n")
+```
+R-square of MLR model=0.8073383
+R-square of Ridge regression model=0.8138928
+The ridge regression model produces a higher r-square value and thus, provides a slightly better fit to the test data compared to the MLR model.
+
+
+Is a higher R-squared statistic always the better model?
+ANS- No,a higher R-squared value does not inherently equate to a superior model. Occasionally, incorporating additional variables can inflate the R-squared value, not necessarily enhancing model quality, but rather suggesting the inclusion of more variables
+
+
+What can be done to specifically improve R-squared value for this Ridge Regression model? (Think about the transformations you can do to the data)
+ANS- There are many methods to improve the r-squared value for the model some of which include-
+1. Handling outliers(since outliers affect the dependent variable to a great extent)
+2. Normalization and scaling (to standardize the coefficients for better comparisons)
+3. Checking for multicollinearity
+4. Residual analysis
+
+
+## Lasso Regression
+
+Write code to build a Lasso Regression model similar to how you built the Ridge Regression model. This time incorporate hyperparameter tuning right away. So first print the optimal lambda value.
+```{r}
+lambda_values <- 10^seq(10, -2, length = 100)
+lasso_model_cv <- cv.glmnet(X_train, y_train, alpha = 1, lambda = lambda_values)
+optimal_lambda_lasso <- lasso_model_cv$lambda.min
+cat("Optimal Lambda for Lasso Regression:", optimal_lambda_lasso, "\n")
+```
+Using glmnet function with cross-validation using a range of lambda values, we have gotten out optimal lambda value to be 0.01
+
+
+Display the coefficients of all the variables. Do you notice some variables being dropped out? Which ones are they?
+
+```{r}
+coef(lasso_model_cv)
+```
+The coefficient of DPD is set to zero(missing) which implies it does not significantly contribute to explaining the variability in WVHT and is thus, dropped out.
+
+
+Let us conclude this one by finding the R-squared statistic for the Lasso Model.
+
+```{r}
+predictions_lasso <- predict(lasso_model_cv, s = optimal_lambda_lasso, newx = X_test)
+R_squared_lasso <- 1 - (sum((predictions_lasso - y_test)^2) / sum((y_test - mean(y_test))^2))
+cat("R-squared for Lasso Model:", R_squared_lasso, "\n")
+```
+The R-squared statistic for the Lasso model slightly surpasses those achieved by MLR or Ridge Regression, suggesting that this model offers an improved fit to the data.. 
+
+
+## Elastic Net Regression
+
+Build your Elastic Net Regression model incorporating all the steps we previously followed for ridge and lasso regression. (Play around with the alpha value and find out how it affects the model)
+```{r}
+alpha_values <- seq(0, 1, by = 0.01)
+lambda_values <- 10^seq(10, -2, length = 100)
+
+#coefficients_enet <- matrix(NA, nrow = length(alpha_values), ncol = ncol(X_train))
+coefficients_enet <- list()
+
+for (i in 1:length(alpha_values)) {
+  alpha <- alpha_values[i]
+  enet_model <- cv.glmnet(X_train, y_train, alpha = alpha, lambda = lambda_values)
+  coefficients_enet[[i]] <- coef(enet_model, s = "lambda.min")
+}
+
+optimal_alpha_index <- which.min(enet_model$cvm)
+optimal_alpha <- alpha_values[optimal_alpha_index]
+optimal_lambda_enet <- enet_model$lambda.min
+cat("Optimal Alpha for Elastic Net:", optimal_alpha, "\n")
+cat("Optimal Lambda for Elastic Net:", optimal_lambda_enet, "\n")
+
+coefficients_optimal_enet <- coefficients_enet[[optimal_alpha_index]]
+print(coefficients_optimal_enet)
+```
+What can you comment about the coefficients of this model? Is it a simple average of Ridge and Lasso Regression? Or does it vary too? What does that tell you about the number of hyperparameters in Elastic Net Regression compared to the other two models?
+ANS-The optimal alpha value of 0.99, close to 1, suggests a bias toward Lasso regularization in the Elastic Net model. Consequently, DPD has been excluded. Elastic Net isn't a simple average of Ridge and Lasso; instead, it empowers us to fine-tune the balance between L1 and L2 regularizations. 
+Elastic Net employs two key hyperparameters: alpha, which governs the balance between L1 and L2 regularization, and lambda, which determines the overall strength of regularization.
+
+***

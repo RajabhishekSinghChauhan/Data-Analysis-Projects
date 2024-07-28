@@ -1,0 +1,207 @@
+---
+title: "Data Analytics Worksheet - 2a"
+
+---
+```{r}
+cars <- read.csv('w1.csv')
+head(cars)
+```
+```{r}
+library(ggplot2)
+library(gridExtra)
+
+plot1 <- ggplot(cars, aes(x = price)) +
+  geom_density() +
+  labs(title = "Car Price Distribution Plot")
+
+# Create the second plot (Car Price Spread)
+plot2 <- ggplot(cars, aes(y = price)) +
+  geom_boxplot() +
+  labs(title = "Car Price Spread")
+
+# Combine the plots and display
+grid.arrange(plot1, plot2, ncol = 2)
+```
+It's evident that the price distribution is strongly right-skewed, with notable outliers. This phenomenon aligns with the notion that these exclusive, luxurious vehicles cater to a select few due to their high cost.
+
+### 1. Simple Linear Regression
+
+From experience, they have understood that the more powerful their car is, the higher they are able to price it at to the public. They want to know if this trend holds perfectly in this new market too. Have a look at the data, pick the right variables and find the if this relationship is true. Create a scatter plot between the dependent and independent variable with the best-fit line passing through. (Hint: use the ggplot library)
+
+```{r}
+library(ggplot2)
+ggplot(cars, aes(x = price, y = horsepower)) +
+  geom_point() +                      
+  geom_smooth(method = "lm", se = FALSE) +  
+  labs(x = "Price", y = "Horsepower") +     
+  ggtitle("Scatter Plot with Simple Linear Regression") 
+```
+The graph illustrates a clear positive linear correlation between the independent variable, 'horsepower,' and the dependent variable, 'price.' This suggests that as a car's horsepower rises, its price generally follows suit. This observation also points to a market demand trend: consumers exhibit a willingness to pay a premium for vehicles boasting greater engine power.
+
+
+What do you infer from your graph? The results don't seem to be very surprising. But there's something that's off about the scatter plot itself. Try plotting the residuals and analyzing if it's only white noise.
+
+```{r}
+library(ggplot2)
+model <- lm(price ~ horsepower, data = cars)
+residuals_df <- data.frame(
+  Fitted_Values = model$fitted.values,
+  Residuals = residuals(model)
+)
+
+ggplot(residuals_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point() +                     
+  geom_hline(yintercept = 0, color = "red") + 
+  labs(x = "Fitted Values", y = "Residuals") +   
+  ggtitle("Residual Plot") 
+```
+The data points are not evenly distributed and thus,variance is unequal.
+
+
+How will you tackle this problem? (Hint: Think about the different kind of transformations you've learnt in class)
+We can tackle the problem of heteroscedasticity by using log- transformation on the dependent variable.
+```{r}
+cars$log_price <- log(cars$price)
+transformed_model <- lm(log_price ~ horsepower, data = cars)
+transformed_residuals_df <- data.frame(
+  Fitted_Values = transformed_model$fitted.values,
+  Residuals = residuals(transformed_model)
+)
+ggplot(transformed_residuals_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(x = "Fitted Values", y = "Residuals") +
+  ggtitle("Residual Plot (Transformed Model)")
+```
+We notice that the residual plot exhibits a relatively symmetric distribution, with residuals tending to cluster around the central region. Additionally, there appears to be roughly constant variance across the data points.
+
+### 2. Logistic Regression
+
+DATA motors currently only build vehicles with rear-wheel drive. In America however, front-wheel drive is known to be quite popular too. Development of this technology will require significant investments into Research & Development. The client wants to know if they can recover costs quickly by charging a premium on front-wheel drive vehicles. 
+
+Analyze the price at which these two types of cars are sold and try to find out if Front-wheel Drive cars are indeed the premium variety in the market, or if rear-wheel drive vehicles can fetch high rates. 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(glmnet)
+
+#considering the threshold as the median of car prices
+median_price <- median(cars$price)
+cars <- cars %>%
+  mutate(is_premium = ifelse(price >= median_price, 1, 0))
+logistic_model <- glm(is_premium ~ drivewheel, data = cars, family = "binomial")
+
+summary(logistic_model)
+
+odds_ratios <- exp(coef(logistic_model))
+cat("Odds ratios:\n")
+print(odds_ratios)
+```
+Is this good news or bad news for the client? As with most things, it's a bit of both. Go ahead and think about why that might be the case here.
+ANS- The good news is that there is no statistically significant evidence to suggest that the type of drivewheel (FWD or RWD) significantly predicts a car being sold at a premium, as indicated by the high p-value of 0.983
+The bad news is that the logistic regression model's overall fit is relatively weak, as suggested by the odds ratio. Therefore, relying solely on pricing as a predictor may not be reliable, and it's important to take other factors into account..
+
+Meanwhile let us try and see how good our logistic regression models are performing on the data. (Hint: Use the inbuilt functions in the pROC library)
+
+```{r}
+library(dplyr)
+library(pROC)
+library(caret)
+
+predicted_probs <- predict(logistic_model, type = "response")
+predicted_class <- ifelse(predicted_probs >= 0.5, 1, 0)
+conf_matrix <- table(predicted = predicted_class, actual = cars$is_premium)
+print(conf_matrix)
+
+roc_obj <- roc(cars$is_premium, predicted_probs)
+plot(roc_obj, main = "ROC Curve for Logistic Regression Model")
+abline(a = 0, b = 1, col = "gray", lty = 2)
+auc_value <- auc(roc_obj)
+cat("AUC:", auc_value, "\n")
+
+```
+
+Those are striking numbers. What does it say about our the drivewheel variable that our Logistic Regression models are able to achieve such high scores across metrics? 
+ANS- The model exhibits a commendable level of accuracy, correctly identifying 102 true negatives and 54 true positives. It effectively classifies numerous instances (cars) into their respective premium and non-premium categories based on the drivewheel variable. An AUC value of 0.7621359 underscores the model's strong ability to discriminate between the two classes, indicating that the drivewheel parameter possesses significant predictive power. 
+
+
+### 3. Multiple Linear Regression
+
+While building our Multiple Linear Regression models, we have the option to include all attributes to predict the price. However, our goal is to achieve the highest predictive accuracy while using the fewest variables, capturing the maximum variation in the target.
+
+Hence, it's crucial to pinpoint the most influential features for predicting our target variable. Employ a correlogram to visually assess the correlations between various independent variables and the dependent variable. Additionally, pay attention to the correlations between independent variables, as this helps avoid multicollinearity and ensures the stability and interpretability of the model.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr) 
+
+cars <- cars %>%
+  mutate(fueltype = ifelse(fueltype == "gas", 1, 0),
+         aspiration = ifelse(aspiration == "std", 1, 0),
+         doornumber = ifelse(doornumber == "two", 1, 0),
+         carbody = as.numeric(factor(carbody, levels = c("sedan", "wagon", "hatchback", "convertible", "hardtop"))),
+         drivewheel = as.numeric(factor(drivewheel, levels = c("rwd", "fwd"))),
+         enginelocation = ifelse(enginelocation == "front", 1, 0),
+         cylindernumber = as.numeric(factor(cylindernumber, levels = c("two", "three", "four", "five", "six", "eight", "twelve"))))
+
+correlation_matrix <- cor(cars[, c("fueltype", "aspiration", "doornumber", "carbody", "drivewheel", "enginelocation", "wheelbase", "carlength", "carwidth", "carheight", "curbweight", "cylindernumber", "horsepower", "mpg", "price")])
+
+correlation_data <- as.data.frame(as.table(correlation_matrix))
+names(correlation_data) <- c("Var1", "Var2", "Correlation")
+
+ggplot(data = correlation_data, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = "Correlogram") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Upon examining the heatmap/correlogram, it becomes apparent that the strongest correlations with price are found in horsepower, curbweight, carwidth, and carlength. These variables can be considered as key candidates for constructing the Multiple Linear Regression (MLR) model.
+
+Use different variables to create the Multiple Linear Regression model and analyze the difference in residual values and F-statistic scores between each of them.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stats)
+
+significant_vars_set <- c("horsepower", "curbweight", "carwidth", "carlength")
+
+analyze_regression_model <- function(data, predictors) {
+  model <- lm(price ~ ., data = data[, c(predictors, "price")])
+  residuals <- residuals(model)
+  f_statistic <- summary(model)$fstatistic
+  r_squared <- summary(model)$r.squared
+  return(list(residuals = residuals, f_statistic = f_statistic, r_squared = r_squared))
+}
+model_results <- analyze_regression_model(cars, significant_vars_set)
+
+cat("Residuals:\n")
+head(model_results$residuals)
+cat("\nF-statistic:\n")
+print(model_results$f_statistic)
+cat("\nR-square value:\n")
+print(model_results$r_squared)
+```
+What can you infer about the fit of Multiple Linear Regression on to the given dataset? 
+ANS- Residuals serve as indicators of the disparities between observed and predicted car prices. Positive residuals signify instances where the model underestimates car prices, while negative residuals indicate cases where the model overestimates them.
+The F-statistic value is an indicator of the model's overall goodness of fit, and it stands at 157.8814, a relatively high value. This implies that, within the model, at least one independent variable is significantly associated with the dependent variable (price)
+The R-squared value of 0.7594 implies that the model provides a reasonably good fit to the given dataset.
+
+
+Which are the most important variables to predict the price of the car?
+```{r}
+model <- lm(price ~ horsepower + curbweight + carwidth + carlength, data = cars)
+coefficients <- coef(model)
+print(coefficients)
+```
+Horsepower, curbweight, and carwidth exhibit positive coefficients, suggesting their potential significance as key variables for predicting car prices
+
+
+How many variables did you use in your best fitting model? Which ones were they?
+ANS- In the best-fitting model, I incorporated four variables: horsepower, curbweight, carwidth, and carlength. These variables were selected due to their strong correlations with price.
+
+***
+
